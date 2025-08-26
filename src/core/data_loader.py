@@ -191,3 +191,33 @@ class DataLoader:
             return False
         
         return True
+
+    def load_pdf_from_bytes(self, pdf_bytes: bytes) -> str:
+        """
+        Extract text from PDF bytes data.
+        
+        Args:
+            pdf_bytes: PDF file content as bytes
+            
+        Returns:
+            Extracted and cleaned text content
+        """
+        try:
+            doc = fitz.open(stream=pdf_bytes, filetype="pdf")
+            text_content = ""
+            
+            # Extract text from each page
+            for page_num in range(len(doc)):
+                page = doc.load_page(page_num)
+                text_content += page.get_text()
+            
+            doc.close()
+            
+            # Clean the extracted text
+            cleaned_text = self._clean_text(text_content)
+            
+            return cleaned_text
+            
+        except Exception as e:
+            logger.error(f"Error loading PDF from bytes: {str(e)}")
+            raise

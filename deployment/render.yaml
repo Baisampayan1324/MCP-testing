@@ -1,17 +1,16 @@
-# Render.com deployment configuration
 services:
   - type: web
-    name: research-paper-summarizer
+    name: mcp-testing
     env: python
     plan: free
-    buildCommand: pip install -r deployment/requirements-minimal.txt
-    startCommand: cd apps && streamlit run app_deploy.py --server.port $PORT --server.address 0.0.0.0
+
+    buildCommand: |
+      pip install --upgrade pip
+      pip install -r deployment/requirements-minimal.txt
+
+    startCommand: |
+      cd apps && streamlit run app_deploy.py --server.port $PORT --server.address 0.0.0.0
+
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.10
-      - key: ENVIRONMENT
-        value: deployment
-      - key: STREAMLIT_SERVER_HEADLESS
-        value: true
-      - key: STREAMLIT_SERVER_ENABLE_CORS
-        value: false
+        value: 3.10.10
