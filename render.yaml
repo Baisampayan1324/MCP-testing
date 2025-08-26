@@ -1,0 +1,17 @@
+# Render.com deployment configuration
+services:
+  - type: web
+    name: research-paper-summarizer
+    env: python
+    plan: free
+    buildCommand: pip install -r requirements-deploy.txt
+    startCommand: streamlit run app_deploy.py --server.port $PORT --server.address 0.0.0.0
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.7
+      - key: ENVIRONMENT
+        value: deployment
+      - key: STREAMLIT_SERVER_HEADLESS
+        value: true
+      - key: STREAMLIT_SERVER_ENABLE_CORS
+        value: false
