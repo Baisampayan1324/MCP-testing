@@ -110,9 +110,12 @@ if 'processed_files' not in st.session_state:
     st.session_state.processed_files = []
 if 'index_path' not in st.session_state:
     st.session_state.index_path = None
+if 'pipeline_initialized' not in st.session_state:
+    st.session_state.pipeline_initialized = False
 
-def initialize_pipeline():
-    """Initialize the RAG pipeline."""
+@st.cache(allow_output_mutation=True)
+def get_pipeline():
+    """Initialize and cache the RAG pipeline."""
     try:
         # Create temporary directory for index
         temp_dir = tempfile.mkdtemp()
@@ -127,20 +130,37 @@ def initialize_pipeline():
             device="cpu"  # Use CPU for demo
         )
         
-        st.session_state.pipeline = pipeline
-        st.session_state.index_path = index_path
-        
-        return pipeline
+        return pipeline, index_path
     except Exception as e:
         st.error(f"Failed to initialize pipeline: {str(e)}")
-        return None
+        return None, None
+
+def initialize_pipeline():
+    """Initialize the RAG pipeline."""
+    if not st.session_state.pipeline_initialized:
+        pipeline, index_path = get_pipeline()
+        if pipeline:
+            st.session_state.pipeline = pipeline
+            st.session_state.index_path = index_path
+            st.session_state.pipeline_initialized = True
+            return pipeline
+    return st.session_state.pipeline
 
 def main():
     """Main application function."""
     
+    # Auto-initialize pipeline on first load
+    if not st.session_state.pipeline_initialized:
+        with st.spinner("🔄 Initializing AI Pipeline... This may take a moment on first load."):
+            initialize_pipeline()
+    
     # Header
     st.markdown('<h1 class="main-header">📚 Research Paper Summarizer</h1>', unsafe_allow_html=True)
     st.markdown('<p style="text-align: center; font-size: 1.2rem; color: #666;">AI-Powered Research Paper Analysis with RAG Technology</p>', unsafe_allow_html=True)
+    
+    # Show pipeline status
+    if st.session_state.pipeline_initialized:
+        st.success("✅ AI Pipeline Ready! You can now upload and process documents.")
     
     # Sidebar
     with st.sidebar:
@@ -165,21 +185,22 @@ def main():
         chunk_size = st.slider("Chunk Size", 500, 2000, 1000, 100)
         chunk_overlap = st.slider("Chunk Overlap", 50, 500, 200, 50)
         
-        # Initialize pipeline button
-        if st.button("🔄 Initialize Pipeline"):
-            with st.spinner("Initializing pipeline..."):
-                pipeline = initialize_pipeline()
-                if pipeline:
-                    st.success("Pipeline initialized successfully!")
+        # Manual re-initialize option
+        if st.button("🔄 Reinitialize Pipeline"):
+            st.session_state.pipeline_initialized = False
+            st.experimental_rerun()
         
         # Pipeline info
         if st.session_state.pipeline:
             st.markdown("### Pipeline Status")
-            info = st.session_state.pipeline.get_pipeline_info()
-            
-            st.metric("Embedding Model", info['embedding_model']['model_name'].split('/')[-1])
-            st.metric("Summarization Model", info['summarization_model']['model_name'].split('/')[-1])
-            st.metric("Total Vectors", info['vector_store_stats']['total_vectors'])
+            try:
+                info = st.session_state.pipeline.get_pipeline_info()
+                
+                st.metric("Embedding Model", info['embedding_model']['model_name'].split('/')[-1])
+                st.metric("Summarization Model", info['summarization_model']['model_name'].split('/')[-1])
+                st.metric("Total Vectors", info['vector_store_stats']['total_vectors'])
+            except:
+                st.write("✅ Pipeline Active")
     
     # Main content area
     tab1, tab2, tab3, tab4 = st.tabs(["📄 Upload & Process", "🔍 Query Documents", "📊 Analytics", "ℹ️ About"])
@@ -187,13 +208,8 @@ def main():
     with tab1:
         st.markdown('<h2 class="sub-header">Upload and Process Research Papers</h2>', unsafe_allow_html=True)
         
-        if not st.session_state.pipeline:
-            st.markdown("""
-            <div class="warning-box">
-                <strong>⚠️ Pipeline Not Initialized</strong><br>
-                Please initialize the pipeline from the sidebar before processing documents.
-            </div>
-            """, unsafe_allow_html=True)
+        if not st.session_state.pipeline_initialized:
+            st.info("🔄 Initializing pipeline... Please wait a moment.")
         else:
             # File upload
             st.markdown('<div class="upload-area">', unsafe_allow_html=True)
