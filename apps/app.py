@@ -10,6 +10,11 @@ from pathlib import Path
 import time
 import json
 from typing import List, Dict
+import sys
+import os
+
+# Add parent directory to path to import src modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from src.rag_pipeline import RAGPipeline
 

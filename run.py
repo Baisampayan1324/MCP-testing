@@ -12,12 +12,14 @@ sys.path.insert(0, str(project_root))
 
 def run_main_app():
     """Run the main Streamlit application"""
-    os.system(f"streamlit run {project_root}/apps/app.py")
+    import subprocess
+    subprocess.run([sys.executable, "-m", "streamlit", "run", f"{project_root}/apps/app.py"])
 
 def run_deploy_app():
     """Run the deployment-optimized application"""
+    import subprocess
     os.environ["ENVIRONMENT"] = "deployment"
-    os.system(f"streamlit run {project_root}/apps/app_deploy.py")
+    subprocess.run([sys.executable, "-m", "streamlit", "run", f"{project_root}/apps/app_deploy.py"])
 
 def run_tests():
     """Run all tests"""
