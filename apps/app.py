@@ -1,33 +1,61 @@
 import streamlit as st
-import tempfile
-import os
-import time
 import sys
+import os
+import tempfile
+import time
 import json
-import io
 
-# Add parent directory to path to import src modules
+# Add the parent directory to the path to import our modules
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.rag_pipeline import RAGPipeline
+from src.core.data_loader import DataLoader
+from src.core.text_splitter import TextSplitter
+from src.core.embedding_service import EmbeddingService
+from src.core.vector_store import VectorStore
+from src.core.summarizer import Summarizer
 
-# Page configuration
-st.set_page_config(
-    page_title="Research Paper Summarizer",
-    page_icon="📚",
-    layout="wide",
-    initial_sidebar_state="collapsed"
-)
+# Model configurations
+EMBEDDING_MODELS = {
+    'all-MiniLM-L6-v2': {
+        'description': 'Fast & Balanced - Good speed/quality ratio',
+        'model_name': 'sentence-transformers/all-MiniLM-L6-v2'
+    },
+    'all-mpnet-base-v2': {
+        'description': 'High Quality - Better accuracy, slower',
+        'model_name': 'sentence-transformers/all-mpnet-base-v2'
+    },
+    'all-distilroberta-v1': {
+        'description': 'Fast - Quick processing, good for large docs',
+        'model_name': 'sentence-transformers/all-distilroberta-v1'
+    },
+    'paraphrase-multilingual-MiniLM-L12-v2': {
+        'description': 'Multilingual - Supports 50+ languages',
+        'model_name': 'sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2'
+    }
+}
 
-# Initialize session state
-if 'pipeline' not in st.session_state:
-    st.session_state.pipeline = None
-if 'processed_files' not in st.session_state:
-    st.session_state.processed_files = []
-if 'pipeline_initialized' not in st.session_state:
-    st.session_state.pipeline_initialized = False
-if 'theme' not in st.session_state:
-    st.session_state.theme = 'light'
+SUMMARIZATION_MODELS = {
+    'facebook/bart-large-cnn': {
+        'description': 'High Quality - Best for detailed summaries',
+        'model_name': 'facebook/bart-large-cnn'
+    },
+    't5-small': {
+        'description': 'Fast - Quick processing, good quality',
+        'model_name': 't5-small'
+    },
+    'google/pegasus-xsum': {
+        'description': 'Concise - Very short, focused summaries',
+        'model_name': 'google/pegasus-xsum'
+    },
+    'sshleifer/distilbart-cnn-12-6': {
+        'description': 'Balanced - Good speed/quality for general use',
+        'model_name': 'sshleifer/distilbart-cnn-12-6'
+    },
+    'philschmid/bart-large-cnn-samsum': {
+        'description': 'Conversational - Best for Q&A style content',
+        'model_name': 'philschmid/bart-large-cnn-samsum'
+    }
+}
 
 def get_theme_styles():
     """Get CSS styles based on current theme."""
@@ -35,15 +63,15 @@ def get_theme_styles():
         return """
         <style>
             /* Dark theme styles */
-            .main .block-container {
-                padding-top: 1rem;
-                padding-bottom: 2rem;
-                max-width: 1200px;
+            .stApp {
                 background-color: #1e1e1e;
                 color: #ffffff;
             }
             
-            .stApp {
+            .main .block-container {
+                padding-top: 2rem;
+                padding-bottom: 2rem;
+                max-width: 1200px;
                 background-color: #1e1e1e;
                 color: #ffffff;
             }
@@ -52,10 +80,13 @@ def get_theme_styles():
                 font-size: 2.5rem;
                 font-weight: 700;
                 text-align: center;
-                margin-bottom: 0.5rem;
+                margin: 1rem 0;
+                padding: 1rem;
                 background: linear-gradient(90deg, #64b5f6 0%, #ab47bc 100%);
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
+                border-radius: 12px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
             }
             
             .subtitle {
@@ -101,17 +132,6 @@ def get_theme_styles():
                 margin: 1rem 0;
             }
             
-            .theme-toggle {
-                position: fixed;
-                top: 1rem;
-                right: 1rem;
-                z-index: 1000;
-                background: #404040;
-                border-radius: 50px;
-                padding: 0.5rem;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-            }
-            
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
@@ -131,20 +151,21 @@ def get_theme_styles():
                 box-shadow: 0 4px 8px rgba(0, 0, 0, 0.4);
             }
             
-            .download-btn {
-                background: linear-gradient(90deg, #4caf50 0%, #45a049 100%);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 0.4rem 0.8rem;
-                font-size: 0.9rem;
-                cursor: pointer;
-                transition: all 0.3s ease;
+            /* Streamlit sidebar styling */
+            .css-1d391kg {
+                background-color: #2d2d2d;
             }
             
-            .download-btn:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+            /* Tab styling */
+            .stTabs [data-baseweb="tab-list"] {
+                gap: 8px;
+            }
+            
+            .stTabs [data-baseweb="tab"] {
+                background-color: #2d2d2d;
+                color: #ffffff;
+                border-radius: 8px;
+                padding: 0.5rem 1rem;
             }
         </style>
         """
@@ -153,7 +174,7 @@ def get_theme_styles():
         <style>
             /* Light theme styles */
             .main .block-container {
-                padding-top: 1rem;
+                padding-top: 2rem;
                 padding-bottom: 2rem;
                 max-width: 1200px;
             }
@@ -161,12 +182,14 @@ def get_theme_styles():
             .main-header {
                 font-size: 2.5rem;
                 font-weight: 700;
-                color: #2c3e50;
                 text-align: center;
-                margin-bottom: 0.5rem;
+                margin: 1rem 0;
+                padding: 1rem;
                 background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
                 -webkit-background-clip: text;
                 -webkit-text-fill-color: transparent;
+                border-radius: 12px;
+                box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
             }
             
             .subtitle {
@@ -211,17 +234,6 @@ def get_theme_styles():
                 margin: 1rem 0;
             }
             
-            .theme-toggle {
-                position: fixed;
-                top: 1rem;
-                right: 1rem;
-                z-index: 1000;
-                background: white;
-                border-radius: 50px;
-                padding: 0.5rem;
-                box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-            }
-            
             #MainMenu {visibility: hidden;}
             footer {visibility: hidden;}
             header {visibility: hidden;}
@@ -241,291 +253,349 @@ def get_theme_styles():
                 box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
             }
             
-            .download-btn {
-                background: linear-gradient(90deg, #4caf50 0%, #45a049 100%);
-                color: white;
-                border: none;
-                border-radius: 8px;
-                padding: 0.4rem 0.8rem;
-                font-size: 0.9rem;
-                cursor: pointer;
-                transition: all 0.3s ease;
+            /* Tab styling */
+            .stTabs [data-baseweb="tab-list"] {
+                gap: 8px;
             }
             
-            .download-btn:hover {
-                transform: translateY(-1px);
-                box-shadow: 0 3px 6px rgba(0, 0, 0, 0.2);
+            .stTabs [data-baseweb="tab"] {
+                background-color: #f8f9fa;
+                border-radius: 8px;
+                padding: 0.5rem 1rem;
             }
         </style>
         """
 
-def create_download_data(processed_files):
-    """Create downloadable data from processed files."""
-    download_data = {
-        "export_info": {
-            "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
-            "total_documents": len(processed_files),
-            "app_version": "Research Paper Summarizer v2.0"
-        },
-        "documents": []
-    }
+def export_data_tab():
+    """Export data tab content."""
+    st.markdown("### 💾 Export Your Data")
     
-    for file_info in processed_files:
-        doc_data = {
-            "filename": file_info['name'],
-            "processing_timestamp": file_info['timestamp'],
-            "summary": file_info['summary'],
-            "total_chunks": file_info['chunks'],
-            "metadata": {
-                "processed_by": "RAG Pipeline",
-                "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-                "summarization_model": "facebook/bart-large-cnn"
+    if 'last_query_result' not in st.session_state or not st.session_state.get('processed_files'):
+        st.info("📄 Process documents and run queries to enable data export")
+        return
+    
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("#### 📋 JSON Export")
+        if st.button("📥 Download JSON Report", key="json_export"):
+            # Create comprehensive JSON export
+            export_data = {
+                "export_info": {
+                    "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "total_documents": len(st.session_state.processed_files),
+                    "app_version": "Research Paper Summarizer v3.0",
+                    "models_used": {
+                        "embedding": st.session_state.embedding_model,
+                        "summarization": st.session_state.summarization_model
+                    }
+                },
+                "processed_documents": st.session_state.processed_files,
+                "query_results": st.session_state.last_query_result
             }
-        }
-        download_data["documents"].append(doc_data)
+            
+            json_data = json.dumps(export_data, indent=2, ensure_ascii=False)
+            st.download_button(
+                label="📥 Download Complete Report",
+                data=json_data,
+                file_name=f"research_analysis_{time.strftime('%Y%m%d_%H%M%S')}.json",
+                mime="application/json"
+            )
     
-    return json.dumps(download_data, indent=2, ensure_ascii=False)
-
-@st.cache(allow_output_mutation=True)
-def get_pipeline():
-    """Initialize and cache the RAG pipeline."""
-    try:
-        temp_dir = tempfile.mkdtemp()
-        index_path = os.path.join(temp_dir, "research_paper_index")
-        
-        pipeline = RAGPipeline(
-            embedding_model="sentence-transformers/all-MiniLM-L6-v2",
-            summarization_model="facebook/bart-large-cnn",
-            chunk_size=1000,
-            chunk_overlap=200,
-            index_path=index_path,
-            device="cpu"
-        )
-        
-        return pipeline, index_path
-    except Exception as e:
-        st.error(f"Failed to initialize pipeline: {str(e)}")
-        return None, None
-
-def initialize_pipeline():
-    """Initialize the RAG pipeline."""
-    if not st.session_state.pipeline_initialized:
-        pipeline, index_path = get_pipeline()
-        if pipeline:
-            st.session_state.pipeline = pipeline
-            st.session_state.index_path = index_path
-            st.session_state.pipeline_initialized = True
-            return pipeline
-    return st.session_state.pipeline
+    with col2:
+        st.markdown("#### 📊 CSV Export")
+        if st.button("📈 Download CSV Summary", key="csv_export"):
+            # Create CSV export
+            csv_data = "Document,Processing_Date,Summary,Model_Used\n"
+            for file_info in st.session_state.processed_files:
+                summary_clean = file_info.get('summary', 'No summary').replace('\n', ' ').replace('"', '""')
+                csv_data += f'"{file_info["name"]}","{file_info["timestamp"]}","{summary_clean}","{st.session_state.summarization_model}"\n'
+            
+            st.download_button(
+                label="📊 Download CSV Report",
+                data=csv_data.encode('utf-8'),
+                file_name=f"research_summary_{time.strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
 
 def main():
-    """Main application function."""
+    st.set_page_config(
+        page_title="Research Paper Summarizer",
+        page_icon="📚",
+        layout="wide",
+        initial_sidebar_state="expanded"
+    )
+    
+    # Initialize session state
+    if 'theme' not in st.session_state:
+        st.session_state.theme = 'light'
+    if 'embedding_model' not in st.session_state:
+        st.session_state.embedding_model = 'all-MiniLM-L6-v2'
+    if 'summarization_model' not in st.session_state:
+        st.session_state.summarization_model = 'facebook/bart-large-cnn'
+    if 'processed_files' not in st.session_state:
+        st.session_state.processed_files = []
     
     # Apply theme styles
     st.markdown(get_theme_styles(), unsafe_allow_html=True)
     
-    # Theme toggle in header
-    col1, col2, col3 = st.columns([1, 3, 1])
-    with col3:
-        theme_icon = "🌙" if st.session_state.theme == 'light' else "☀️"
-        if st.button(theme_icon, help="Toggle theme"):
-            st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
-            st.experimental_rerun()
-    
-    # Auto-initialize pipeline
-    if not st.session_state.pipeline_initialized:
-        with st.spinner("🚀 Initializing AI Pipeline..."):
-            initialize_pipeline()
-    
-    # Clean header
-    st.markdown('<h1 class="main-header">📚 Research Paper Summarizer</h1>', unsafe_allow_html=True)
-    st.markdown('<p class="subtitle">AI-powered document analysis with advanced RAG technology</p>', unsafe_allow_html=True)
-    
-    # Status indicator
-    if st.session_state.pipeline_initialized:
-        st.markdown('<div class="status-success">✅ AI Pipeline Ready</div>', unsafe_allow_html=True)
-    
-    # Enhanced sidebar
-    with st.sidebar:
-        st.markdown("## ⚙️ Settings")
-        if st.session_state.pipeline:
-            st.write("🤖 **Embedding**: MiniLM-L6-v2")
-            st.write("📝 **Summarizer**: BART-Large")
-            st.write("💾 **Vector Store**: FAISS")
-            
-            st.markdown("---")
-            
-            # Download section
-            if st.session_state.processed_files:
-                st.markdown("### 📥 Export Data")
-                
-                download_data = create_download_data(st.session_state.processed_files)
-                
-                st.download_button(
-                    label="📄 Download Summary Report",
-                    data=download_data,
-                    file_name=f"research_summary_{time.strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json",
-                    help="Download processed documents and summaries as JSON"
-                )
-                
-                # Create CSV for simple viewing
-                csv_data = "Filename,Processing Date,Chunks,Summary\n"
-                for file_info in st.session_state.processed_files:
-                    summary_clean = file_info['summary'].replace('\n', ' ').replace('"', '""')
-                    csv_data += f'"{file_info["name"]}","{file_info["timestamp"]}",{file_info["chunks"]},"{summary_clean}"\n'
-                
-                st.download_button(
-                    label="📊 Download CSV Report",
-                    data=csv_data.encode('utf-8'),
-                    file_name=f"research_summary_{time.strftime('%Y%m%d_%H%M%S')}.csv",
-                    mime="text/csv",
-                    help="Download as CSV for Excel/Sheets"
-                )
-            
-            st.markdown("---")
-            
-            if st.button("🔄 Reset Pipeline"):
-                st.session_state.pipeline_initialized = False
+    # Theme toggle
+    with st.container():
+        col1, col2, col3 = st.columns([6, 1, 1])
+        with col3:
+            if st.button("🌓", help="Toggle Theme"):
+                st.session_state.theme = 'dark' if st.session_state.theme == 'light' else 'light'
                 st.experimental_rerun()
     
-    # Main content - two clean tabs
-    tab1, tab2 = st.tabs(["📄 Upload & Process", "🔍 Query Documents"])
+    # Main header with better visibility
+    st.markdown("""
+        <div style="text-align: center; padding: 2rem 0;">
+            <h1 class="main-header">📚 Research Paper Summarizer</h1>
+            <p class="subtitle">Upload your research papers and get AI-powered summaries and insights</p>
+        </div>
+    """, unsafe_allow_html=True)
+    
+    # Sidebar for model selection and settings
+    with st.sidebar:
+        st.markdown("### ⚙️ Model Settings")
+        
+        # Embedding model selection
+        st.markdown("#### 🔍 Embedding Model")
+        selected_embedding = st.selectbox(
+            "Choose embedding model:",
+            options=list(EMBEDDING_MODELS.keys()),
+            index=list(EMBEDDING_MODELS.keys()).index(st.session_state.embedding_model),
+            format_func=lambda x: f"{x} - {EMBEDDING_MODELS[x]['description']}",
+            help="Embedding models convert text to numerical representations for similarity search"
+        )
+        
+        if selected_embedding != st.session_state.embedding_model:
+            st.session_state.embedding_model = selected_embedding
+            if 'vector_store' in st.session_state:
+                del st.session_state.vector_store  # Reset vector store when model changes
+        
+        # Summarization model selection
+        st.markdown("#### 📝 Summarization Model")
+        selected_summarization = st.selectbox(
+            "Choose summarization model:",
+            options=list(SUMMARIZATION_MODELS.keys()),
+            index=list(SUMMARIZATION_MODELS.keys()).index(st.session_state.summarization_model),
+            format_func=lambda x: f"{x} - {SUMMARIZATION_MODELS[x]['description']}",
+            help="Summarization models generate concise summaries from longer text"
+        )
+        
+        if selected_summarization != st.session_state.summarization_model:
+            st.session_state.summarization_model = selected_summarization
+        
+        # Model info
+        st.markdown("---")
+        st.markdown("#### ℹ️ Current Models")
+        st.info(f"**Embedding:** {EMBEDDING_MODELS[st.session_state.embedding_model]['description']}")
+        st.info(f"**Summarization:** {SUMMARIZATION_MODELS[st.session_state.summarization_model]['description']}")
+        
+        # Clear data option
+        st.markdown("---")
+        if st.button("🗑️ Clear All Data", key="sidebar_clear"):
+            clear_session_data()
+    
+    # Main content tabs
+    tab1, tab2 = st.tabs(["📄 Document Processing", "💾 Export Data"])
     
     with tab1:
-        if not st.session_state.pipeline_initialized:
-            st.info("🔄 Initializing pipeline...")
-            return
-            
+        # File upload section
         st.markdown('<div class="upload-card">', unsafe_allow_html=True)
-        st.markdown("### Upload Research Papers")
-        
         uploaded_files = st.file_uploader(
-            "Choose PDF or text files",
-            type=['pdf', 'txt'],
+            "Choose PDF files", 
+            type=['pdf'], 
             accept_multiple_files=True,
-            help="Upload research papers to analyze"
+            help="Upload one or more PDF research papers"
         )
         
         if uploaded_files:
-            for file in uploaded_files:
-                if file.name not in [f['name'] for f in st.session_state.processed_files]:
-                    with st.expander(f"📄 Processing: {file.name}", expanded=True):
-                        with st.spinner(f"Processing {file.name}..."):
-                            try:
-                                # Save and process file
-                                temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(file.name)[1])
-                                temp_file.write(file.read())
-                                temp_file.close()
-                                
-                                result = st.session_state.pipeline.process_document(temp_file.name)
-                                
-                                # Store file info
-                                st.session_state.processed_files.append({
-                                    'name': file.name,
-                                    'summary': result.get('final_summary', 'No summary available'),
-                                    'chunks': len(result.get('chunk_summaries', [])),
-                                    'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
-                                    'full_result': result  # Store full result for download
-                                })
-                                
-                                os.unlink(temp_file.name)
-                                
-                                # Show results
-                                st.success(f"✅ Successfully processed {file.name}")
-                                
-                                if 'final_summary' in result:
-                                    st.markdown('<div class="result-card">', unsafe_allow_html=True)
-                                    st.markdown("**📋 Document Summary:**")
-                                    st.write(result['final_summary'])
-                                    st.markdown('</div>', unsafe_allow_html=True)
-                                
-                                st.info(f"📊 Processed {len(result.get('chunk_summaries', []))} text chunks")
-                                
-                            except Exception as e:
-                                st.error(f"❌ Error processing {file.name}: {str(e)}")
-        
-        # Show processed files with enhanced display
-        if st.session_state.processed_files:
-            st.markdown("### 📚 Processed Documents")
-            for i, file_info in enumerate(st.session_state.processed_files):
-                with st.expander(f"📄 {file_info['name']} ({file_info['timestamp']})"):
-                    col1, col2 = st.columns([3, 1])
-                    
-                    with col1:
-                        st.markdown('<div class="result-card">', unsafe_allow_html=True)
-                        st.write(f"**Chunks:** {file_info['chunks']}")
-                        st.write(f"**Summary:** {file_info['summary'][:200]}...")
-                        st.markdown('</div>', unsafe_allow_html=True)
-                    
-                    with col2:
-                        # Individual document download
-                        if 'full_result' in file_info:
-                            doc_json = json.dumps({
-                                "document": file_info['name'],
-                                "processed": file_info['timestamp'],
-                                "summary": file_info['summary'],
-                                "chunks": file_info['chunks'],
-                                "full_analysis": file_info.get('full_result', {})
-                            }, indent=2, ensure_ascii=False)
-                            
-                            st.download_button(
-                                label="📥 Download",
-                                data=doc_json,
-                                file_name=f"{file_info['name']}_analysis.json",
-                                mime="application/json",
-                                key=f"download_{i}"
-                            )
+            col1, col2 = st.columns(2)
+            with col1:
+                if st.button("🔄 Process Documents", key="process_docs"):
+                    process_documents(uploaded_files)
+            with col2:
+                if st.button("🗑️ Clear All Data", key="main_clear"):
+                    clear_session_data()
         
         st.markdown('</div>', unsafe_allow_html=True)
+        
+        # Processing status
+        if uploaded_files:
+            st.markdown('<div class="status-info">📁 Files ready for processing</div>', unsafe_allow_html=True)
+        
+        # Query section
+        if 'vector_store' in st.session_state and st.session_state.vector_store is not None:
+            st.markdown('<div class="result-card">', unsafe_allow_html=True)
+            st.markdown("### 🔍 Ask Questions About Your Documents")
+            
+            # Query input
+            query = st.text_input(
+                "Enter your question:",
+                placeholder="e.g., What are the main findings of this research?"
+            )
+            
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                if st.button("🔍 Search & Summarize", key="search_summarize"):
+                    if query:
+                        answer_query(query)
+                    else:
+                        st.warning("Please enter a question first.")
+            
+            # Display results
+            if 'last_query_result' in st.session_state:
+                st.markdown("#### 📋 Results:")
+                result = st.session_state.last_query_result
+                
+                if 'summary' in result:
+                    st.markdown("**Summary:**")
+                    st.write(result['summary'])
+                
+                if 'relevant_chunks' in result:
+                    with st.expander("📄 Relevant Text Sections", expanded=False):
+                        for i, chunk in enumerate(result['relevant_chunks'], 1):
+                            st.markdown(f"**Section {i}:**")
+                            st.write(chunk)
+                            st.markdown("---")
+            
+            st.markdown('</div>', unsafe_allow_html=True)
     
     with tab2:
-        if not st.session_state.pipeline_initialized:
-            st.info("🔄 Initializing pipeline...")
-            return
+        export_data_tab()
+
+def process_documents(uploaded_files):
+    """Process uploaded documents with improved error handling."""
+    try:
+        progress_bar = st.progress(0)
+        status_placeholder = st.empty()
+        
+        # Initialize components with selected models
+        status_placeholder.markdown('<div class="status-info">🔧 Initializing AI models...</div>', unsafe_allow_html=True)
+        progress_bar.progress(10)
+        
+        # Load selected models
+        embedding_service = EmbeddingService(model_name=EMBEDDING_MODELS[st.session_state.embedding_model]['model_name'])
+        progress_bar.progress(25)
+        
+        # Process documents
+        status_placeholder.markdown('<div class="status-info">📖 Processing documents...</div>', unsafe_allow_html=True)
+        all_chunks = []
+        
+        for i, uploaded_file in enumerate(uploaded_files):
+            # Extract text from PDF
+            loader = DataLoader()
+            text = loader.load_pdf_from_bytes(uploaded_file.getvalue())
             
-        if not st.session_state.processed_files:
-            st.markdown('<div class="status-info">📄 Upload and process documents first to enable querying</div>', unsafe_allow_html=True)
-            return
+            # Split text into chunks
+            splitter = TextSplitter()
+            chunks = splitter.split_text(text)
+            all_chunks.extend(chunks)
+            
+            progress = 25 + (i + 1) * (50 / len(uploaded_files))
+            progress_bar.progress(int(progress))
         
-        st.markdown('<div class="upload-card">', unsafe_allow_html=True)
-        st.markdown("### Ask Questions About Your Documents")
+        # Create vector store
+        status_placeholder.markdown('<div class="status-info">🔍 Creating vector database...</div>', unsafe_allow_html=True)
+        vector_store = VectorStore()
         
-        query = st.text_input(
-            "Enter your question:",
-            placeholder="What is the main contribution of this research?",
-            help="Ask specific questions about the uploaded documents"
+        # Generate embeddings for all chunks
+        embeddings_data = []
+        for i, chunk in enumerate(all_chunks):
+            embedding = embedding_service.embed_text(chunk)
+            embeddings_data.append({
+                'embedding': embedding,
+                'text': chunk,
+                'chunk_id': f"chunk_{i}",
+                'metadata': {'chunk_index': i}
+            })
+        
+        # Add embeddings to vector store
+        vector_store.add_embeddings(embeddings_data)
+        st.session_state.vector_store = vector_store
+        progress_bar.progress(90)
+        
+        # Store document info
+        st.session_state.processed_files = [
+            {
+                'name': f.name,
+                'timestamp': time.strftime("%Y-%m-%d %H:%M:%S"),
+                'chunks': len(all_chunks) // len(uploaded_files)  # Approximate chunks per file
+            } for f in uploaded_files
+        ]
+        st.session_state.total_chunks = len(all_chunks)
+        
+        progress_bar.progress(100)
+        status_placeholder.markdown(
+            f'<div class="status-success">✅ Successfully processed {len(uploaded_files)} documents into {len(all_chunks)} text chunks!</div>', 
+            unsafe_allow_html=True
         )
         
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            k_results = st.slider("Number of results", 1, 10, 3)
-        with col2:
-            if st.button("🔍 Search", disabled=not query):
-                if query:
-                    with st.spinner("Searching documents..."):
-                        try:
-                            results = st.session_state.pipeline.query_documents(query, k=k_results)
-                            
-                            if results and 'results' in results:
-                                st.markdown('<div class="result-card">', unsafe_allow_html=True)
-                                st.markdown(f"**🎯 Answer for: '{query}'**")
-                                st.write(results['final_answer'])
-                                st.markdown('</div>', unsafe_allow_html=True)
-                                
-                                # Show source chunks
-                                with st.expander("📚 Source Chunks", expanded=False):
-                                    for i, chunk in enumerate(results['results'][:3]):
-                                        st.markdown(f"**Chunk {i+1}** (Score: {chunk['score']:.3f})")
-                                        st.write(chunk['content'][:300] + "...")
-                                        st.markdown("---")
-                            else:
-                                st.warning("No relevant information found.")
-                                
-                        except Exception as e:
-                            st.error(f"Error during search: {str(e)}")
+    except Exception as e:
+        st.error(f"Error processing documents: {str(e)}")
+        st.info("💡 Try: 1) Check PDF files are not corrupted 2) Ensure sufficient memory 3) Try smaller files")
         
-        st.markdown('</div>', unsafe_allow_html=True)
+def answer_query(query):
+    """Answer user query with better error handling."""
+    try:
+        if 'vector_store' not in st.session_state:
+            st.error("Please process documents first!")
+            return
+        
+        progress_bar = st.progress(0)
+        status_placeholder = st.empty()
+        
+        # Search for relevant chunks
+        status_placeholder.markdown('<div class="status-info">🔍 Searching relevant content...</div>', unsafe_allow_html=True)
+        progress_bar.progress(30)
+        
+        embedding_service = EmbeddingService(model_name=EMBEDDING_MODELS[st.session_state.embedding_model]['model_name'])
+        relevant_chunks = st.session_state.vector_store.search(query, embedding_service, top_k=5)
+        progress_bar.progress(60)
+        
+        if not relevant_chunks:
+            st.warning("No relevant information found. Try rephrasing your question or check if documents were processed correctly.")
+            st.info("💡 Tips: Use specific keywords, ask about main topics, or try broader questions")
+            return
+        
+        # Generate summary
+        status_placeholder.markdown('<div class="status-info">📝 Generating summary...</div>', unsafe_allow_html=True)
+        summarizer = Summarizer(model_name=SUMMARIZATION_MODELS[st.session_state.summarization_model]['model_name'])
+        
+        # Combine relevant chunks
+        context = "\n\n".join(relevant_chunks)
+        summary = summarizer.summarize_with_query(context, query)
+        progress_bar.progress(90)
+        
+        # Store results
+        result = {
+            'query': query,
+            'summary': summary,
+            'relevant_chunks': relevant_chunks,
+            'model_info': {
+                'embedding': st.session_state.embedding_model,
+                'summarization': st.session_state.summarization_model
+            },
+            'timestamp': time.strftime("%Y-%m-%d %H:%M:%S")
+        }
+        st.session_state.last_query_result = result
+        progress_bar.progress(100)
+        status_placeholder.markdown('<div class="status-success">✅ Analysis complete!</div>', unsafe_allow_html=True)
+        
+    except Exception as e:
+        st.error(f"Error processing query: {str(e)}")
+        st.info("💡 Try: 1) Check if documents are processed correctly 2) Rephrase your question 3) Use simpler queries")
+
+def clear_session_data():
+    """Clear all session data."""
+    keys_to_clear = ['vector_store', 'processed_files', 'total_chunks', 'last_query_result']
+    for key in keys_to_clear:
+        if key in st.session_state:
+            del st.session_state[key]
+    st.success("✅ All data cleared!")
+    st.experimental_rerun()
 
 if __name__ == "__main__":
     main()
