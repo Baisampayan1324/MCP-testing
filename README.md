@@ -1,16 +1,61 @@
 # 📚 Research Paper Summarization System
 
-AI-powered research paper analysis using **Modular Component-Based (MCB) pipelines** with **Retrieval-Augmented Generation (RAG)** techniques.
+A complete RAG (Retrieval-Augmented Generation) system for research paper summarization with modular architecture and cloud deployment support.
 
-## 🎯 Features
+## 🚀 Quick Start
 
-- 📄 **Multi-format Input**: PDF and text file processing
-- 🔍 **Intelligent Chunking**: Smart text segmentation with overlap
-- 🧠 **Vector Embeddings**: State-of-the-art sentence transformers
-- 💾 **FAISS Vector Store**: Efficient similarity search
-- 📝 **Multi-level Summarization**: Chunk + document summaries
-- ❓ **RAG-based Q&A**: Query documents with context
-- 🎨 **Beautiful Streamlit UI**: Modern web interface
+1. **Install dependencies:**
+   ```bash
+   pip install -r requirements.txt
+   ```
+
+2. **Run locally (full models):**
+   ```bash
+   cd apps
+   streamlit run app.py
+   ```
+
+3. **Run deployment version (optimized):**
+   ```bash
+   cd apps
+   streamlit run app_deploy.py
+   ```
+
+## 📁 Project Structure
+
+```
+📁 Research Paper Summarization System/
+├── 📁 src/core/           # Core RAG pipeline modules
+│   ├── data_loader.py     # File processing & text extraction
+│   ├── text_splitter.py   # Intelligent text chunking
+│   ├── embedding_service.py # Vector embeddings
+│   ├── vector_store.py    # FAISS similarity search
+│   └── summarizer.py      # BART summarization
+├── 📁 apps/               # Streamlit applications
+│   ├── app.py            # Full-featured local app
+│   └── app_deploy.py     # Lightweight deployment app
+├── 📁 deployment/         # Cloud deployment configs
+│   ├── Procfile          # Heroku configuration
+│   ├── render.yaml       # Render.com configuration
+│   ├── requirements-deploy.txt # Optimized dependencies
+│   └── runtime.txt       # Python version
+├── 📁 configs/            # Configuration files
+├── 📁 tests/              # Unit tests
+├── 📁 docs/               # Documentation
+│   ├── PROJECT_STRUCTURE.md
+│   └── DEPLOYMENT.md
+├── requirements.txt       # Main dependencies
+└── README.md             # This file
+```
+
+## ✨ Features
+
+- 📄 PDF and text file processing
+- 🔍 Advanced text chunking and embedding
+- 🧠 FAISS vector store for similarity search
+- 📝 BART-based summarization
+- 🌐 Streamlit web interface
+- ☁️ Cloud deployment ready
 
 ## 🏗️ Architecture
 
@@ -20,73 +65,21 @@ Data Loader → Text Splitter → Embedding Service → Vector Store
 Summarizer ← RAG Pipeline ← Query Interface
 ```
 
-## 🛠️ Installation
+## 📖 Documentation
 
-1. **Install dependencies**:
-```bash
-pip install -r requirements.txt
-```
+- [Project Structure](docs/PROJECT_STRUCTURE.md) - Detailed folder organization
+- [Deployment Guide](docs/DEPLOYMENT.md) - Cloud deployment instructions
 
-2. **Run the web app**:
-```bash
-streamlit run app.py
-```
+## ⚡ Performance
 
-3. **Or run the demo**:
-```bash
-python example.py
-```
+- **Local version** (`app.py`): Full models for best quality
+- **Deploy version** (`app_deploy.py`): Optimized lightweight models (3x faster)
 
-## 🚀 Quick Start
+## 🛠️ Usage
 
-```python
-from rag_pipeline import RAGPipeline
+1. Upload a research paper (PDF or text)
+2. Wait for processing and indexing
+3. Ask questions about the content
+4. Get relevant summaries and answers
 
-# Initialize pipeline
-pipeline = RAGPipeline(
-    embedding_model="sentence-transformers/all-MiniLM-L6-v2",
-    summarization_model="facebook/bart-large-cnn"
-)
-
-# Process document
-result = pipeline.process_document("paper.pdf")
-print(result['final_summary'])
-
-# Query documents
-query_result = pipeline.query_documents("What are the main findings?")
-print(query_result['summary'])
-```
-
-## 📦 Modules
-
-- `data_loader.py`: PDF/text parsing
-- `text_splitter.py`: Intelligent chunking
-- `embedding_service.py`: Vector embeddings
-- `vector_store.py`: FAISS storage
-- `summarizer.py`: Multi-level summarization
-- `rag_pipeline.py`: Main orchestrator
-- `app.py`: Streamlit frontend
-
-## 🔧 Configuration
-
-- **Embedding Models**: `all-MiniLM-L6-v2`, `all-mpnet-base-v2`
-- **Summarization Models**: `bart-large-cnn`, `flan-t5-large`
-- **Chunk Size**: 500-2000 characters
-- **Device**: CPU/CUDA (auto-detected)
-
-## 📊 Performance
-
-- **10 pages**: ~30 seconds, ~2GB RAM
-- **50 pages**: ~2 minutes, ~4GB RAM
-- **100 pages**: ~5 minutes, ~6GB RAM
-
-## 🤝 Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Submit a pull request
-
----
-
-**Built with ❤️ for the research community**
+Choose the appropriate app version based on your needs!

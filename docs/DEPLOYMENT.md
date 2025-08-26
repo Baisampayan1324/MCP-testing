@@ -29,8 +29,9 @@
    - Select "New Web Service"
    - Choose your repository
    - Use these settings:
-     - **Build Command**: `pip install -r requirements-deploy.txt`
-     - **Start Command**: `streamlit run app_deploy.py --server.port $PORT --server.address 0.0.0.0`
+     - **Build Command**: `pip install -r deployment/requirements-minimal.txt`
+     - **Start Command**: `cd apps && streamlit run app_deploy.py --server.port $PORT --server.address 0.0.0.0`
+     - **Python Version**: `3.11.10`
      - **Environment**: `ENVIRONMENT=deployment`
 
 #### Render Benefits:
