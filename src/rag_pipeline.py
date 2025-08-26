@@ -9,11 +9,11 @@ from typing import List, Dict, Union, Optional
 from pathlib import Path
 import time
 
-from data_loader import DataLoader
-from text_splitter import TextSplitter, TextChunk
-from embedding_service import EmbeddingService
-from vector_store import VectorStore
-from summarizer import Summarizer
+from .core.data_loader import DataLoader
+from .core.text_splitter import TextSplitter, TextChunk
+from .core.embedding_service import EmbeddingService
+from .core.vector_store import VectorStore
+from .core.summarizer import Summarizer
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

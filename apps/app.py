@@ -11,7 +11,7 @@ import time
 import json
 from typing import List, Dict
 
-from rag_pipeline import RAGPipeline
+from src.rag_pipeline import RAGPipeline
 
 # Page configuration
 st.set_page_config(

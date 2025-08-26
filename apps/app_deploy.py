@@ -13,7 +13,7 @@ from typing import List, Dict
 # Set environment for deployment
 os.environ["ENVIRONMENT"] = "deployment"
 
-from rag_pipeline import RAGPipeline
+from src.rag_pipeline import RAGPipeline
 
 # Page configuration
 st.set_page_config(
