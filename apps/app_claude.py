@@ -287,7 +287,7 @@ def get_optimized_styles():
     </style>
     """
 
-@st.cache_resource
+@st.cache(allow_output_mutation=True)
 def load_embedding_model(model_name: str):
     """Load embedding model with caching."""
     try:
@@ -296,7 +296,7 @@ def load_embedding_model(model_name: str):
         st.error(f"Error loading embedding model: {str(e)}")
         return None
 
-@st.cache_resource
+@st.cache(allow_output_mutation=True)
 def load_summarization_model(model_name: str):
     """Load summarization model with caching."""
     try:
@@ -696,6 +696,10 @@ def display_query_results():
         return
     
     result = st.session_state.last_query_result
+    
+    # Check if result is None or empty
+    if not result:
+        return
     
     st.markdown('<div class="result-section">', unsafe_allow_html=True)
     st.markdown('<div class="result-header">Query Results</div>', unsafe_allow_html=True)

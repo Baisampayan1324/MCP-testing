@@ -21,22 +21,16 @@ def run_deploy_app():
     os.environ["ENVIRONMENT"] = "deployment"
     subprocess.run([sys.executable, "-m", "streamlit", "run", f"{project_root}/apps/app_deploy.py"])
 
-def run_tests():
-    """Run all tests"""
-    os.system(f"python {project_root}/tests/test_system.py")
-    os.system(f"python {project_root}/tests/test_deployment.py")
-
 def main():
     """Main script entry point"""
     print("🚀 RAG System Quick Start")
     print("=" * 30)
     print("1. Run Main App (Full Features)")
     print("2. Run Deploy App (Optimized)")
-    print("3. Run Tests")
-    print("4. Exit")
-    
-    choice = input("\nSelect option (1-4): ").strip()
-    
+    print("3. Exit")
+
+    choice = input("\nSelect option (1-3): ").strip()
+
     if choice == "1":
         print("🖥️  Starting main application...")
         run_main_app()
@@ -44,13 +38,10 @@ def main():
         print("🚀 Starting deployment application...")
         run_deploy_app()
     elif choice == "3":
-        print("🧪 Running tests...")
-        run_tests()
-    elif choice == "4":
         print("👋 Goodbye!")
         sys.exit(0)
     else:
-        print("❌ Invalid choice. Please select 1-4.")
+        print("❌ Invalid choice. Please select 1-3.")
         main()
 
 if __name__ == "__main__":
