@@ -504,10 +504,12 @@ def process_documents(uploaded_files):
         # Generate embeddings for all chunks
         embeddings_data = []
         for i, chunk in enumerate(all_chunks):
-            embedding = embedding_service.embed_text(chunk)
+            # Extract text from TextChunk object
+            chunk_text = chunk.text if hasattr(chunk, 'text') else str(chunk)
+            embedding = embedding_service.generate_embedding(chunk_text)
             embeddings_data.append({
                 'embedding': embedding,
-                'text': chunk,
+                'text': chunk_text,
                 'chunk_id': f"chunk_{i}",
                 'metadata': {'chunk_index': i}
             })
@@ -552,7 +554,7 @@ def answer_query(query):
         progress_bar.progress(30)
         
         embedding_service = EmbeddingService(model_name=EMBEDDING_MODELS[st.session_state.embedding_model]['model_name'])
-        relevant_chunks = st.session_state.vector_store.search(query, embedding_service, top_k=5)
+        relevant_chunks = st.session_state.vector_store.search_by_text(query, embedding_service, k=5)
         progress_bar.progress(60)
         
         if not relevant_chunks:
@@ -564,9 +566,8 @@ def answer_query(query):
         status_placeholder.markdown('<div class="status-info">📝 Generating summary...</div>', unsafe_allow_html=True)
         summarizer = Summarizer(model_name=SUMMARIZATION_MODELS[st.session_state.summarization_model]['model_name'])
         
-        # Combine relevant chunks
-        context = "\n\n".join(relevant_chunks)
-        summary = summarizer.summarize_with_query(context, query)
+        # The relevant_chunks are already in the right format (list of dicts with 'text' keys)
+        summary = summarizer.summarize_with_rag(query, relevant_chunks)
         progress_bar.progress(90)
         
         # Store results
